@@ -246,6 +246,8 @@ export default function CardGenerator() {
     }
   };
 
+  const [isSaved, setIsSaved] = useState(false);
+
   const handleDownload = () => {
     playSound();
     const canvas = canvasRef.current;
@@ -255,6 +257,12 @@ export default function CardGenerator() {
     link.download = `${prefix}_no${cardNo}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
+
+    // 「保存しました」を表示
+    setIsSaved(true);
+    setTimeout(() => {
+      setIsSaved(false);
+    }, 2500);
   };
 
   // Xシェア（シンプルにXのポスト作成画面を開く）
@@ -277,6 +285,12 @@ export default function CardGenerator() {
 
   return (
     <div className="h-full flex flex-col lg:flex-row gap-0 overflow-hidden relative">
+      {/* 保存完了トースト通知 */}
+      {isSaved && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-6 py-2.5 rounded-full shadow-2xl text-sm font-black flex items-center gap-2 border border-emerald-400 animate-bounce pointer-events-none">
+          <span>✓ 保存しました</span>
+        </div>
+      )}
 
       {/* プレビュー（PC: 右 / スマホ: 上） */}
       <div className="flex-1 lg:flex-none lg:w-[58%] flex items-center justify-center bg-slate-100 p-2 lg:p-6 overflow-hidden order-1 lg:order-2">
@@ -378,9 +392,13 @@ export default function CardGenerator() {
               <button
                 onClick={handleDownload}
                 disabled={isLoading || !loaded}
-                className="bg-[#004098] hover:bg-blue-900 text-white font-black text-sm py-4 rounded-xl transition-all shadow-md flex items-center justify-center active:scale-[0.98]"
+                className={`${
+                  isSaved
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-[#004098] hover:bg-blue-900 text-white'
+                } font-black text-sm py-4 rounded-xl transition-all shadow-md flex items-center justify-center active:scale-[0.98]`}
               >
-                高画質保存
+                {isSaved ? '✓ 保存しました' : '高画質保存'}
               </button>
               <button
                 onClick={handleShare}
