@@ -165,40 +165,85 @@ export default function CardGenerator() {
 
   // ── ハンドラ ──
 
-  // 再生成（クリックで音を鳴らし、Member No を確実に加算してカードを更新！）
-  const handleRedraw = async () => {
+  // 再生成（クリックで音を鳴らし、0ミリ秒で即座に新しいカードへ同期描画！）
+  const handleRedraw = () => {
     playSound();
-    // 画面上で確実に番号を+1カウントアップ
-    setCardNo((prev) => {
-      const current = parseInt(prev, 10);
-      const next = isNaN(current) ? 1 : current + 1;
-      return String(next).padStart(4, '0');
-    });
 
-    setConfig(drawPattern());
-    setUsagiIndex(randomFrom(VALID_USAGI_INDICES));
+    // 1. 次の番号、デザイン、うさぎを即座に計算
+    const current = parseInt(cardNo, 10);
+    const nextNo = String(isNaN(current) ? 1 : current + 1).padStart(4, '0');
+    const nextConfig = drawPattern(config?.pattern, config?.photoKey);
+    const candidateUsagi = VALID_USAGI_INDICES.filter((i) => i !== usagiIndex);
+    const nextUsagi = candidateUsagi.length > 0
+      ? candidateUsagi[Math.floor(Math.random() * candidateUsagi.length)]
+      : VALID_USAGI_INDICES[0];
 
-    // サーバー側カウンターも非同期で更新（成功したら最新値を反映）
-    try {
-      const res = await fetch('/api/issue-no', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.no) {
+    // 2. React ステート更新
+    setCardNo(nextNo);
+    setConfig(nextConfig);
+    setUsagiIndex(nextUsagi);
+
+    // 3. 【超高速】ReactのuseEffectや再レンダリングを待たず、Canvasへ今すぐ同期描画！
+    const canvas = canvasRef.current;
+    if (canvas && photosRef.current && qrCodesRef.current) {
+      const usagiImg =
+        usagiMapRef.current[nextUsagi] ??
+        usagiMapRef.current[VALID_USAGI_INDICES[0]] ??
+        (logoImgRef.current as HTMLImageElement);
+
+      drawCard(canvas, {
+        name,
+        bio,
+        cardNo: nextNo,
+        config: nextConfig,
+        photos: photosRef.current,
+        qrCodes: qrCodesRef.current,
+        usagiImg,
+        logoImg: logoImgRef.current ?? usagiImg,
+      });
+    }
+
+    // 4. サーバー側カウンターを非同期で更新（成功したら反映）
+    fetch('/api/issue-no', { method: 'POST' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.no) {
           setCardNo((prev) => {
-            const current = parseInt(prev, 10);
+            const c = parseInt(prev, 10);
             const serverNo = parseInt(data.no, 10);
-            return String(Math.max(current, serverNo)).padStart(4, '0');
+            return String(Math.max(c, serverNo)).padStart(4, '0');
           });
         }
-      }
-    } catch (_) {}
+      })
+      .catch(() => {});
   };
 
   const handleNextPhoto = () => {
     playSound();
     if (!config || config.isRare) return;
-    const nextIndex = (NOGAMI_PHOTOS.indexOf(config.photoKey) + 1) % NOGAMI_PHOTOS.length;
-    setConfig({ ...config, photoKey: NOGAMI_PHOTOS[nextIndex] });
+    const currentIndex = NOGAMI_PHOTOS.indexOf(config.photoKey);
+    const nextIndex = (currentIndex + 1) % NOGAMI_PHOTOS.length;
+    const nextConfig = { ...config, photoKey: NOGAMI_PHOTOS[nextIndex] };
+    setConfig(nextConfig);
+
+    // ポーズ切り替えも即座に直接描画
+    const canvas = canvasRef.current;
+    if (canvas && photosRef.current && qrCodesRef.current) {
+      const usagiImg =
+        usagiMapRef.current[usagiIndex] ??
+        usagiMapRef.current[VALID_USAGI_INDICES[0]] ??
+        (logoImgRef.current as HTMLImageElement);
+      drawCard(canvas, {
+        name,
+        bio,
+        cardNo,
+        config: nextConfig,
+        photos: photosRef.current,
+        qrCodes: qrCodesRef.current,
+        usagiImg,
+        logoImg: logoImgRef.current ?? usagiImg,
+      });
+    }
   };
 
   const handleDownload = () => {

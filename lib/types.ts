@@ -181,18 +181,24 @@ export const CARD_PATTERNS: CardConfig[] = [
   },
 ];
 
-export function drawPattern(): CardConfig {
-  const rand = Math.random();
-  let cumulative = 0;
-  for (const config of CARD_PATTERNS) {
-    cumulative += config.probability;
-    if (rand < cumulative) {
-      if (!config.isRare) {
-        const randomPhoto = NOGAMI_PHOTOS[Math.floor(Math.random() * NOGAMI_PHOTOS.length)];
-        return { ...config, photoKey: randomPhoto };
-      }
-      return { ...config };
-    }
+export function drawPattern(currentPattern?: CardPattern, currentPhoto?: PhotoKey): CardConfig {
+  // 3%の確率でレア（福井ゆうた）
+  if (Math.random() < 0.03) {
+    const rareConfig = CARD_PATTERNS.find((c) => c.isRare);
+    if (rareConfig) return { ...rareConfig };
   }
-  return CARD_PATTERNS[0];
+
+  // 直前と異なるパターンを選定（毎回確実に色がガラリと変わる）
+  const normalConfigs = CARD_PATTERNS.filter((c) => !c.isRare && c.pattern !== currentPattern);
+  const selectedConfig = normalConfigs.length > 0
+    ? normalConfigs[Math.floor(Math.random() * normalConfigs.length)]
+    : CARD_PATTERNS[0];
+
+  // 写真も直前と異なるものを優先選定
+  const candidatePhotos = NOGAMI_PHOTOS.filter((p) => p !== currentPhoto);
+  const selectedPhoto = candidatePhotos.length > 0
+    ? candidatePhotos[Math.floor(Math.random() * candidatePhotos.length)]
+    : NOGAMI_PHOTOS[0];
+
+  return { ...selectedConfig, photoKey: selectedPhoto };
 }
