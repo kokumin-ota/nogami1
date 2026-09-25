@@ -165,19 +165,33 @@ export default function CardGenerator() {
 
   // ── ハンドラ ──
 
+  // 再生成（クリックで音を鳴らし、Member No を確実に加算してカードを更新！）
   const handleRedraw = async () => {
     playSound();
-    setIsLoading(true);
-    try {
-      const no = await fetchNextCardNo();
-      setCardNo(no);
-    } catch (e) {
-      console.error('連番加算エラー', e);
-    } finally {
-      setIsLoading(false);
-    }
+    // 画面上で確実に番号を+1カウントアップ
+    setCardNo((prev) => {
+      const current = parseInt(prev, 10);
+      const next = isNaN(current) ? 1 : current + 1;
+      return String(next).padStart(4, '0');
+    });
+
     setConfig(drawPattern());
     setUsagiIndex(randomFrom(VALID_USAGI_INDICES));
+
+    // サーバー側カウンターも非同期で更新（成功したら最新値を反映）
+    try {
+      const res = await fetch('/api/issue-no', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.no) {
+          setCardNo((prev) => {
+            const current = parseInt(prev, 10);
+            const serverNo = parseInt(data.no, 10);
+            return String(Math.max(current, serverNo)).padStart(4, '0');
+          });
+        }
+      }
+    } catch (_) {}
   };
 
   const handleNextPhoto = () => {
@@ -198,96 +212,17 @@ export default function CardGenerator() {
     link.click();
   };
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isSharing, setIsSharing] = useState(false);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4500);
-  };
-
-  const handleShare = async () => {
+  // Xシェア（シンプルにXのポスト作成画面を開く）
+  const handleShare = () => {
     playSound();
-    const canvas = canvasRef.current;
     const isRare = config?.isRare ?? false;
     const formattedNo = cardNo === '----' ? '0000' : cardNo.padStart(4, '0');
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nogami1.vercel.app';
 
-    if (!canvas) return;
-
-    setIsSharing(true);
-    let shareUrl = '';
-
-    try {
-      // 1. Canvas 画像をサーバーに保存してOGP付きシェアURLを発行
-      const dataUrl = canvas.toDataURL('image/png');
-      const res = await fetch('/api/save-card', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: dataUrl,
-          cardNo: formattedNo,
-          isRare,
-          name,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.sharePath) {
-          shareUrl = `${getBaseUrl()}${data.sharePath}`;
-        }
-      }
-    } catch (saveErr) {
-      console.error('OGP画像保存エラー:', saveErr);
-    }
-
-    const postUrl = shareUrl || getBaseUrl();
     const tweetText = isRare
-      ? `No.${formattedNo} / \n【レア】福井チルドレン証を作成！\n\n#福井ゆうた #国民民主党 #東京都議会議員\n${postUrl}`
-      : `No.${formattedNo} / \n野上チルドレン証を作成！\n\n#野上だいき #国民民主党 #大田区政策委員\n${postUrl}`;
+      ? `No.${formattedNo} / \n【レア】福井チルドレン証を作成！\n\n#福井ゆうた #国民民主党 #東京都議会議員\n${siteUrl}`
+      : `No.${formattedNo} / \n野上チルドレン証を作成！\n\n#野上だいき #国民民主党 #大田区政策委員\n${siteUrl}`;
 
-    try {
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      if (blob) {
-        const fileName = `${isRare ? 'fukui_children' : 'nogami_children'}_no${cardNo}.png`;
-        const file = new File([blob], fileName, { type: 'image/png' });
-
-        // スマホ等のWeb Share APIで直接ファイル共有できる場合
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              text: tweetText,
-              files: [file],
-            });
-            setIsSharing(false);
-            return;
-          } catch (shareErr) {
-            if ((shareErr as Error).name === 'AbortError') {
-              setIsSharing(false);
-              return;
-            }
-          }
-        }
-
-        // PCブラウザ：クリップボードへ画像コピー
-        try {
-          if (navigator.clipboard && window.ClipboardItem) {
-            await navigator.clipboard.write([
-              new window.ClipboardItem({ 'image/png': blob }),
-            ]);
-            showToast('画像をコピーしました！Xの投稿画面で「貼り付け（Ctrl+V）」できます📋');
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSharing(false);
-    }
-
-    // XのWeb Intentを開く
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
   };
 
@@ -297,12 +232,6 @@ export default function CardGenerator() {
 
   return (
     <div className="h-full flex flex-col lg:flex-row gap-0 overflow-hidden relative">
-      {/* トースト通知 */}
-      {toastMessage && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center gap-2 border border-slate-700 animate-in fade-in slide-in-from-top-4 duration-200 pointer-events-none text-center max-w-[90%]">
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* プレビュー（PC: 右 / スマホ: 上） */}
       <div className="flex-1 lg:flex-none lg:w-[58%] flex items-center justify-center bg-slate-100 p-2 lg:p-6 overflow-hidden order-1 lg:order-2">
@@ -410,10 +339,10 @@ export default function CardGenerator() {
               </button>
               <button
                 onClick={handleShare}
-                disabled={isLoading || !loaded || isSharing}
-                className="bg-black hover:bg-slate-800 text-white font-black text-sm py-4 rounded-xl transition-all shadow-md flex items-center justify-center active:scale-[0.98] disabled:opacity-50"
+                disabled={isLoading || !loaded}
+                className="bg-black hover:bg-slate-800 text-white font-black text-sm py-4 rounded-xl transition-all shadow-md flex items-center justify-center active:scale-[0.98]"
               >
-                {isSharing ? '準備中...' : 'Xシェア'}
+                Xシェア
               </button>
             </div>
           </div>
