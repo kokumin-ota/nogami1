@@ -114,9 +114,7 @@ function useImageResources() {
 // ─── Member No. 取得 ─────────────────────────────────────────────────
 
 async function fetchNextCardNo(): Promise<string> {
-  const res = await fetch('/api/issue-no', { method: 'POST' });
-  const data = await res.json();
-  return (data.no as string) ?? '0001';
+  return String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 }
 
 // ─── メインコンポーネント ─────────────────────────────────────────────
@@ -170,8 +168,7 @@ export default function CardGenerator() {
     playSound();
 
     // 1. 次の番号、デザイン、うさぎを即座に計算
-    const current = parseInt(cardNo, 10);
-    const nextNo = String(isNaN(current) ? 1 : current + 1).padStart(4, '0');
+    const nextNo = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
     const nextConfig = drawPattern(config?.pattern, config?.photoKey);
     const candidateUsagi = VALID_USAGI_INDICES.filter((i) => i !== usagiIndex);
     const nextUsagi = candidateUsagi.length > 0
@@ -273,8 +270,8 @@ export default function CardGenerator() {
     const siteUrl = typeof window !== 'undefined' ? window.location.origin : 'https://nogami1.vercel.app';
 
     const tweetText = isRare
-      ? `No.${formattedNo} / \n【レア】福井チルドレン証を作成！\n\n#福井ゆうた #国民民主党 #東京都議会議員\n${siteUrl}`
-      : `No.${formattedNo} / \n野上チルドレン証を作成！\n\n#野上だいき #国民民主党 #大田区政策委員\n${siteUrl}`;
+      ? `No.${formattedNo} / \n【レア】福井チルドレン証を作成！\n\n#福井ゆうた #国民民主党 #東京都議会議員\n@dpfp_fukui\n${siteUrl}`
+      : `No.${formattedNo} / \n野上チルドレン証を作成！\n\n#野上だいき #国民民主党 #大田区政策委員\n@daiki_nogami_\n${siteUrl}`;
 
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`, '_blank');
   };
